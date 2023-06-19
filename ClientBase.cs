@@ -4,9 +4,8 @@ using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using System.Linq;
 
-public class ClientBase : Shared
+public abstract class ClientBase : Shared
 {
     public ConnectionStatus Connected {get; private set;} = ConnectionStatus.NotConnected;
     public enum ConnectionStatus {
@@ -18,8 +17,6 @@ public class ClientBase : Shared
 
     private TcpConnection TcpClient;
 
-    private const float ServerTimeoutDuration = 5f;
-
     async void OnApplicationQuit() {
         await StopClient();
     }
@@ -30,8 +27,6 @@ public class ClientBase : Shared
         try {
             // Start client
             Client = new TcpClient();
-            Client.SendTimeout =
-            Client.ReceiveTimeout = SecondsToMilliseconds(ServerTimeoutDuration);
             // Connect to the server
             bool Success = await WaitForTask(Client.ConnectAsync(ServerIpAddress, ServerPort), Timeout);
             if (Success) {
@@ -39,6 +34,10 @@ public class ClientBase : Shared
                 ClientLog($"Client started at {System.DateTime.Now.ToString("HH:mm:ss")}");
                 // Create the connection
                 TcpClient = new TcpConnection((IPEndPoint)Client.Client.LocalEndPoint, Client, Client.GetStream());
+                // Listen for packets from the server
+                var _ = ListenForPackets(TcpClient, () => TcpClient != null, (Connection, Bytes) => ReceivedFromServer(Bytes), null);
+                // Mark connection as pending
+                Connected = ConnectionStatus.ConnectionPending;
             }
             else {
                 // Output
@@ -49,9 +48,7 @@ public class ClientBase : Shared
         catch (System.Exception E) {
             ClientLog("Client could not start: " + E.Message);
             Connected = ConnectionStatus.NotConnected;
-            if (Client != null) {
-                Client.Close();
-            }
+            if (Client != null) Client.Close();
             TcpClient = null;
             return false;
         }
@@ -60,18 +57,51 @@ public class ClientBase : Shared
         // Send close message
         await SendToServer(MessageCodes.Close);
         // Stop the client
-        TcpClient.TcpClient.Close();
+        if (TcpClient != null) TcpClient.TcpClient.Close();
         TcpClient = null;
         // Mark as disconnected
         Connected = ConnectionStatus.NotConnected;
-        // OnDisconnected();
+        // Output
+        ClientLog("Client disconnected");
+        // Run custom function
+        RunInMainThread(OnClientDisconnected);
     }
-    protected async Task<bool> SendToServer(string Message) {
+    protected async Task<bool> SendToServer(string Message, float Timeout = -1) {
         if (TcpClient != null) {
+            // Encrypt message
+            string EncryptedMessage = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
             // Send bytes
-            await TcpClient.NetworkStream.WriteAsync(CreatePacket(Message));
+            await WaitForTask(TcpClient.NetworkStream.WriteAsync(CreatePacket(EncryptedMessage)).AsTask(), Timeout);
             return true;
         }
         return false;
     }
+    protected async void ReceivedFromServer(byte[] Bytes) {
+        // Get message as string
+        string EncryptedMessage = MessageEncoding.GetString(Bytes);
+        // Decrypt message
+        string Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(EncryptedMessage, EncryptionKey) : EncryptedMessage;
+        // Check message
+        if (Message == MessageCodes.Close || Message == MessageCodes.ServerFull) {
+            await StopClient();
+            return;
+        }
+        else if (Message == MessageCodes.Welcome) {
+            // Mark as connected
+            Connected = ConnectionStatus.Connected;
+            // Output
+            ClientLog("Client connected");
+            // Run custom function
+            RunInMainThread(OnClientConnected);
+            return;
+        }
+        // Output
+        ClientLog("Received message from {" + TcpClient.EndPoint + "}: " + Message);
+        // Run custom function
+        RunInMainThread(() => OnReceivedFromServer(Message));
+    }
+
+    protected abstract void OnReceivedFromServer(string Message);
+    protected abstract void OnClientConnected();
+    protected abstract void OnClientDisconnected();
 }

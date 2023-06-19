@@ -4,7 +4,6 @@ using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using System.Linq;
 
 public abstract class ServerBase : Shared
 {
@@ -12,8 +11,6 @@ public abstract class ServerBase : Shared
 
     private TcpListener TcpServer;
     private readonly List<TcpConnection> TcpConnections = new();
-
-    private const float ClientTimeoutDuration = 5f;
 
     async void OnApplicationQuit() {
         await StopServer();
@@ -31,6 +28,8 @@ public abstract class ServerBase : Shared
             ServerLog($"Server started at {System.DateTime.Now.ToString("HH:mm:ss")}");
             // Mark as ready
             Ready = true;
+            // Run custom function
+            RunInMainThread(OnServerStarted);
         }
         catch (System.Exception E) {
             ServerLog("Server could not start: " + E.Message);
@@ -51,8 +50,10 @@ public abstract class ServerBase : Shared
 		}
         // Output
         ServerLog("Stopped server");
+        // Run custom function
+        RunInMainThread(OnServerStopped);
     }
-    private async Task<bool> AcceptClients(int Timeout = -1) {
+    private async Task<bool> AcceptClients(float Timeout = -1) {
         // Await clients
         Task<TcpClient> TcpClientAwaiter = TcpServer.AcceptTcpClientAsync();
         bool Success = await WaitForTask(TcpClientAwaiter, Timeout);
@@ -67,9 +68,19 @@ public abstract class ServerBase : Shared
                 RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.Welcome));
                 // Output
                 ServerLog("Client {" + TcpConnection.EndPoint + "} connected");
-                //
-                // RunInMainThread(() => StartCoroutine(ListenToClient(TcpConnection)));
-                var _ = ListenToClient(TcpConnection);
+                // Listen for packets from the client
+                float TimeSinceReceivedData = 0;
+                var _ = ListenForPackets(TcpConnection, () => TcpConnections.Contains(TcpConnection), ReceivedFromClient, async ReceivedData => {
+                    if (ReceivedData) {
+                        TimeSinceReceivedData = Time.time;
+                    }
+                    else if (Time.time - TimeSinceReceivedData >= ClientTimeoutDuration) {
+                        ServerLog("Client timed out");
+                        await DisconnectClient(TcpConnection);
+                    }
+                });
+                // Run custom function
+                RunInMainThread(() => OnClientConnected(TcpConnection));
             }
             // Reject the client
             else {
@@ -92,82 +103,42 @@ public abstract class ServerBase : Shared
         TcpConnections.Remove(TcpConnection);
         // Output
         ServerLog("Client {" + TcpConnection.EndPoint + "} forcefully disconnected");
+        // Run custom function
+        RunInMainThread(() => OnClientDisconnected(TcpConnection));
     }
-    protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message) {
+    protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message, float Timeout = -1) {
         if (TcpConnections.Contains(TcpConnection)) {
+            // Encrypt message
+            string EncryptedMessage = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
             // Send bytes
-            await TcpConnection.NetworkStream.WriteAsync(CreatePacket(Message));
+            await WaitForTask(TcpConnection.NetworkStream.WriteAsync(CreatePacket(EncryptedMessage)).AsTask(), Timeout);
             return true;
         }
         return false;
     }
-    protected async Task SendToAllClients(string Message) {
+    protected async Task SendToAllClients(string Message, float TimeoutPerClient = -1) {
+        HashSet<Task> Tasks = new();
         foreach (TcpConnection TcpConnection in TcpConnections) {
-            await SendToClient(TcpConnection, Message);
+            Tasks.Add(WaitForTask(SendToClient(TcpConnection, Message), TimeoutPerClient));
         }
-    }
-    private int GetMessageLength(IEnumerable<byte> Bytes) {
-        System.Text.StringBuilder Digits = new();
-        foreach (byte Byte in Bytes) {
-            if (Byte >= 10) {
-                throw new System.Exception("Invalid message length digit: " + Byte);
-            }
-            Digits.Append(Byte);
+        foreach (Task Task in Tasks) {
+            await Task;
         }
-        return int.Parse(Digits.ToString());
-    }
-    
-    private static async Task<byte> ReadSingleByteAsync(NetworkStream Stream) {
-        byte[] Buffer = new byte[1];
-        await Stream.ReadAsync(Buffer, 0, 1);
-        return Buffer[0];
-    }
-    protected async Task ListenToClient(TcpConnection TcpConnection) {
-        // Output
-        ServerLog("Starting listening for messages from client");
-        // Read messages from the client
-        bool BuildingMessageLength = true;
-        int MessageLength = 0;
-        List<byte> CurrentBytes = new();
-        while (TcpConnections.Contains(TcpConnection)) {
-            while (TcpConnection.NetworkStream.DataAvailable) {
-                // Read message length
-                if (BuildingMessageLength == true) {
-                    while (TcpConnection.NetworkStream.DataAvailable) {
-                        byte NextByte = await ReadSingleByteAsync(TcpConnection.NetworkStream);
-                        if (NextByte == 10) {
-                            // Got the message length
-                            BuildingMessageLength = false;
-                            MessageLength = int.Parse(string.Join("", CurrentBytes));
-                            CurrentBytes.Clear();
-                            break;
-                        }
-                        CurrentBytes.Add(NextByte);
-                    }
-                }
-                // Read message
-                else {
-                    byte[] Buffer = new byte[BufferSize];
-                    int BytesRead = await TcpConnection.NetworkStream.ReadAsync(Buffer, 0, Buffer.Length);
-                    CurrentBytes.AddRange(Buffer.ToList().GetRange(0, BytesRead));
-                    if (CurrentBytes.Count >= MessageLength) {
-                        // Got the message
-                        BuildingMessageLength = true;
-                        MessageLength = 0;
-                        ReceivedFromClient(TcpConnection, CurrentBytes.ToArray());
-                        CurrentBytes.Clear();
-                    }
-                }
-            }
-
-            await Task.Delay(SecondsToMilliseconds(0.05f));
-        }
-        await DisconnectClient(TcpConnection);
     }
     protected void ReceivedFromClient(TcpConnection TcpConnection, byte[] Bytes) {
         // Get message as string
-        string Message = MessageEncoding.GetString(Bytes);
+        string EncryptedMessage = MessageEncoding.GetString(Bytes);
+        // Decrypt message
+        string Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(EncryptedMessage, EncryptionKey) : EncryptedMessage;
         // Output
         ServerLog("Received message from {" + TcpConnection.EndPoint + "}: " + Message);
+        // Run custom function
+        RunInMainThread(() => OnReceivedFromClient(TcpConnection, Message));
     }
+
+    protected abstract void OnReceivedFromClient(TcpConnection Client, string Message);
+    protected abstract void OnClientConnected(TcpConnection Client);
+    protected abstract void OnClientDisconnected(TcpConnection Client);
+    protected abstract void OnServerStarted();
+    protected abstract void OnServerStopped();
 }
