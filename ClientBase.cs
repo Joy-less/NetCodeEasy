@@ -31,10 +31,10 @@ public abstract class ClientBase : Shared
                 ClientLog($"Client started at {System.DateTime.Now.ToString("HH:mm:ss")}");
                 // Create the connection
                 TcpClient = new TcpConnection((IPEndPoint)Client.Client.LocalEndPoint, Client, Client.GetStream());
-                // Listen for packets from the server
-                _ = ListenForPackets(TcpClient, () => TcpClient != null, (Connection, Bytes) => ReceivedFromServer(Bytes), null);
                 // Mark connection as pending
                 Connected = ConnectionStatus.ConnectionPending;
+                // Listen for packets from the server
+                _ = ListenForPackets(TcpClient, () => Connected == ConnectionStatus.Connected || Connected == ConnectionStatus.ConnectionPending, (Connection, Bytes) => ReceivedFromServer(Bytes), null);
             }
             else {
                 // Output

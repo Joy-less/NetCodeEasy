@@ -65,16 +65,16 @@ public abstract class ServerBase : Shared
             if (TcpConnections.Count + 1 <= MaxClientCount) {
                 TcpConnections.Add(TcpConnection);
                 // Tell the client that they are welcome
-                _ = RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.Welcome));
+                await RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.Welcome));
                 // Output
                 ServerLog("Client {" + TcpConnection.EndPoint + "} connected");
                 // Listen for packets from the client
-                float TimeSinceReceivedData = 0;
+                double TimeLastReceivedData = GetUnixTimeStamp();
                 _ = ListenForPackets(TcpConnection, () => TcpConnections.Contains(TcpConnection), ReceivedFromClient, async ReceivedData => {
                     if (ReceivedData) {
-                        TimeSinceReceivedData = Time.time;
+                        TimeLastReceivedData = GetUnixTimeStamp();
                     }
-                    else if (Time.time - TimeSinceReceivedData >= ClientTimeoutDuration) {
+                    else if (GetUnixTimeStamp() - TimeLastReceivedData >= ClientTimeoutDuration) {
                         ServerLog("Client timed out");
                         await DisconnectClient(TcpConnection);
                     }

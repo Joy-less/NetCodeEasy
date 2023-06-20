@@ -70,6 +70,9 @@ public class Shared : MonoBehaviour
     protected static int SecondsToMilliseconds(float Seconds) {
         return (int)(Seconds * 1000);
     }
+    protected static double GetUnixTimeStamp() {
+        return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000d;
+    }
     protected static byte[] CreatePacket(string Message) {
         // Get message as bytes
         byte[] Bytes = MessageEncoding.GetBytes(Message);
