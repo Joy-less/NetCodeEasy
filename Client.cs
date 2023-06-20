@@ -1,12 +1,16 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Threading.Tasks;
 
 public class Client : ClientBase
 {
     async void Start() {
         bool Success = await ConnectToServer(5f);
-        if (Success == false) {
+        if (Success) {
+            print("Connection established; waiting to be accepted or rejected");
+        }
+        else {
             print("Couldn't connect to server; timed out");
         }
     }

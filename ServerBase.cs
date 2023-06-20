@@ -10,6 +10,7 @@ public abstract class ServerBase : Shared
 
     private TcpListener TcpServer;
     private readonly List<TcpConnection> TcpConnections = new();
+    private readonly List<TcpConnection> BlockedTcpConnections = new();
 
     async void OnApplicationQuit() {
         await StopServer();
@@ -22,13 +23,13 @@ public abstract class ServerBase : Shared
             TcpServer.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, 1);
             TcpServer.Start();
             // Accept clients
-            var _ = Task.Run(() => AcceptClients());
+            _ = Task.Run(() => AcceptClients());
             // Output
             ServerLog($"Server started at {System.DateTime.Now.ToString("HH:mm:ss")}");
             // Mark as ready
             Ready = true;
             // Run custom function
-            RunInMainThread(OnServerStarted);
+            _ = RunInMainThread(OnServerStarted);
         }
         catch (System.Exception E) {
             ServerLog("Server could not start: " + E.Message);
@@ -50,7 +51,7 @@ public abstract class ServerBase : Shared
         // Output
         ServerLog("Stopped server");
         // Run custom function
-        RunInMainThread(OnServerStopped);
+        _ = RunInMainThread(OnServerStopped);
     }
     private async Task<bool> AcceptClients(float Timeout = -1) {
         // Await clients
@@ -60,16 +61,16 @@ public abstract class ServerBase : Shared
             // Get the network client
             TcpClient Client = TcpClientAwaiter.Result;
             TcpConnection TcpConnection = new TcpConnection((IPEndPoint)Client.Client.RemoteEndPoint, Client, Client.GetStream());
-            TcpConnections.Add(TcpConnection);
             // Welcome the client
-            if (TcpConnections.Count <= MaxClientCount) {
+            if (TcpConnections.Count + 1 <= MaxClientCount) {
+                TcpConnections.Add(TcpConnection);
                 // Tell the client that they are welcome
-                RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.Welcome));
+                _ = RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.Welcome));
                 // Output
                 ServerLog("Client {" + TcpConnection.EndPoint + "} connected");
                 // Listen for packets from the client
                 float TimeSinceReceivedData = 0;
-                var _ = ListenForPackets(TcpConnection, () => TcpConnections.Contains(TcpConnection), ReceivedFromClient, async ReceivedData => {
+                _ = ListenForPackets(TcpConnection, () => TcpConnections.Contains(TcpConnection), ReceivedFromClient, async ReceivedData => {
                     if (ReceivedData) {
                         TimeSinceReceivedData = Time.time;
                     }
@@ -79,12 +80,13 @@ public abstract class ServerBase : Shared
                     }
                 });
                 // Run custom function
-                RunInMainThread(() => OnClientConnected(TcpConnection));
+                _ = RunInMainThread(() => OnClientConnected(TcpConnection));
             }
             // Reject the client
             else {
+                BlockedTcpConnections.Add(TcpConnection);
                 // Tell the client that the server is full
-                RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.ServerFull));
+                await RunInMainThread(async () => await SendToClient(TcpConnection, MessageCodes.ServerFull));
                 // Output
                 ServerLog("Client {" + TcpConnection.EndPoint + "} tried to join but the server was full");
                 // Disconnect them
@@ -97,21 +99,22 @@ public abstract class ServerBase : Shared
         // Send close message
         await SendToClient(TcpConnection, Shared.MessageCodes.Close);
         // Disconnect the client
+        TcpConnections.Remove(TcpConnection);
+        BlockedTcpConnections.Remove(TcpConnection);
         TcpConnection.TcpClient.Close();
         TcpConnection.NetworkStream.Close();
-        TcpConnections.Remove(TcpConnection);
         // Output
         ServerLog("Client {" + TcpConnection.EndPoint + "} disconnected");
         // Run custom function
-        RunInMainThread(() => OnClientDisconnected(TcpConnection));
+        _ = RunInMainThread(() => OnClientDisconnected(TcpConnection));
     }
     protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message, bool NoDelay = false, float Timeout = -1) {
-        if (TcpConnections.Contains(TcpConnection)) {
+        if (TcpConnections.Contains(TcpConnection) || BlockedTcpConnections.Contains(TcpConnection)) {
             // Encrypt message
-            string EncryptedMessage = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
+            Message = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
             // Send bytes
             TcpConnection.TcpClient.NoDelay = NoDelay;
-            await WaitForTask(TcpConnection.NetworkStream.WriteAsync(CreatePacket(EncryptedMessage)).AsTask(), Timeout);
+            await WaitForTask(TcpConnection.NetworkStream.WriteAsync(CreatePacket(Message)).AsTask(), Timeout);
             return true;
         }
         return false;
@@ -127,13 +130,16 @@ public abstract class ServerBase : Shared
     }
     protected void ReceivedFromClient(TcpConnection TcpConnection, byte[] Bytes) {
         // Get message as string
-        string EncryptedMessage = MessageEncoding.GetString(Bytes);
+        string Message = MessageEncoding.GetString(Bytes);
         // Decrypt message
-        string Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(EncryptedMessage, EncryptionKey) : EncryptedMessage;
+        Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(Message, EncryptionKey) : Message;
         // Output
         ServerLog("Received message from {" + TcpConnection.EndPoint + "}: " + Message);
         // Run custom function
-        RunInMainThread(() => OnReceivedFromClient(TcpConnection, Message));
+        _ = RunInMainThread(() => OnReceivedFromClient(TcpConnection, Message));
+    }
+    protected TcpConnection[] GetClients() {
+        return TcpConnections.ToArray();
     }
 
     protected abstract void OnReceivedFromClient(TcpConnection Client, string Message);

@@ -34,8 +34,11 @@ public class Shared : MonoBehaviour
     }
     
     private Queue<System.Action> PendingActionsForMainThread = new();
-    protected void RunInMainThread(System.Action Action) {
+    protected async Task RunInMainThread(System.Action Action) {
         PendingActionsForMainThread.Enqueue(Action);
+        do {
+            await Task.Delay(15);
+        } while (PendingActionsForMainThread.Contains(Action));
     }
     protected virtual void Update() {
         while (PendingActionsForMainThread.TryDequeue(out System.Action Action)) {

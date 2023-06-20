@@ -32,7 +32,7 @@ public abstract class ClientBase : Shared
                 // Create the connection
                 TcpClient = new TcpConnection((IPEndPoint)Client.Client.LocalEndPoint, Client, Client.GetStream());
                 // Listen for packets from the server
-                var _ = ListenForPackets(TcpClient, () => TcpClient != null, (Connection, Bytes) => ReceivedFromServer(Bytes), null);
+                _ = ListenForPackets(TcpClient, () => TcpClient != null, (Connection, Bytes) => ReceivedFromServer(Bytes), null);
                 // Mark connection as pending
                 Connected = ConnectionStatus.ConnectionPending;
             }
@@ -61,24 +61,24 @@ public abstract class ClientBase : Shared
         // Output
         ClientLog("Client disconnected");
         // Run custom function
-        RunInMainThread(OnClientDisconnected);
+        _ = RunInMainThread(OnClientDisconnected);
     }
     protected async Task<bool> SendToServer(string Message, bool NoDelay = false, float Timeout = -1) {
-        if (TcpClient != null) {
+        if (Connected == ConnectionStatus.Connected) {
             // Encrypt message
-            string EncryptedMessage = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
+            Message = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
             // Send bytes
             TcpClient.TcpClient.NoDelay = NoDelay;
-            await WaitForTask(TcpClient.NetworkStream.WriteAsync(CreatePacket(EncryptedMessage)).AsTask(), Timeout);
+            await WaitForTask(TcpClient.NetworkStream.WriteAsync(CreatePacket(Message)).AsTask(), Timeout);
             return true;
         }
         return false;
     }
     protected async void ReceivedFromServer(byte[] Bytes) {
         // Get message as string
-        string EncryptedMessage = MessageEncoding.GetString(Bytes);
+        string Message = MessageEncoding.GetString(Bytes);
         // Decrypt message
-        string Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(EncryptedMessage, EncryptionKey) : EncryptedMessage;
+        Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(Message, EncryptionKey) : Message;
         // Check message
         if (Message == MessageCodes.Close || Message == MessageCodes.ServerFull) {
             await DisconnectFromServer();
@@ -90,13 +90,13 @@ public abstract class ClientBase : Shared
             // Output
             ClientLog("Client connected");
             // Run custom function
-            RunInMainThread(OnClientConnected);
+            _ = RunInMainThread(OnClientConnected);
             return;
         }
         // Output
         ClientLog("Received message from {" + TcpClient.EndPoint + "}: " + Message);
         // Run custom function
-        RunInMainThread(() => OnReceivedFromServer(Message));
+        _ = RunInMainThread(() => OnReceivedFromServer(Message));
     }
 
     protected abstract void OnReceivedFromServer(string Message);
