@@ -13,6 +13,9 @@ public class Server : ServerBase
         if (Input.GetKeyDown(KeyCode.X)) {
             await StopServer();
         }
+        else if (Input.GetKeyDown(KeyCode.Q)) {
+            await SendToAllClients("Hello");
+        }
     }
 
     protected override void OnServerStarted() {

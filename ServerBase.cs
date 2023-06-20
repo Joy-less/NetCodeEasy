@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Net;
@@ -102,24 +101,25 @@ public abstract class ServerBase : Shared
         TcpConnection.NetworkStream.Close();
         TcpConnections.Remove(TcpConnection);
         // Output
-        ServerLog("Client {" + TcpConnection.EndPoint + "} forcefully disconnected");
+        ServerLog("Client {" + TcpConnection.EndPoint + "} disconnected");
         // Run custom function
         RunInMainThread(() => OnClientDisconnected(TcpConnection));
     }
-    protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message, float Timeout = -1) {
+    protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message, bool NoDelay = false, float Timeout = -1) {
         if (TcpConnections.Contains(TcpConnection)) {
             // Encrypt message
             string EncryptedMessage = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
             // Send bytes
+            TcpConnection.TcpClient.NoDelay = NoDelay;
             await WaitForTask(TcpConnection.NetworkStream.WriteAsync(CreatePacket(EncryptedMessage)).AsTask(), Timeout);
             return true;
         }
         return false;
     }
-    protected async Task SendToAllClients(string Message, float TimeoutPerClient = -1) {
+    protected async Task SendToAllClients(string Message, bool NoDelay = false, float Timeout = -1) {
         HashSet<Task> Tasks = new();
         foreach (TcpConnection TcpConnection in TcpConnections) {
-            Tasks.Add(WaitForTask(SendToClient(TcpConnection, Message), TimeoutPerClient));
+            Tasks.Add(SendToClient(TcpConnection, Message, NoDelay, Timeout));
         }
         foreach (Task Task in Tasks) {
             await Task;

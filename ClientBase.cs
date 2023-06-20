@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -18,7 +15,7 @@ public abstract class ClientBase : Shared
     private TcpConnection TcpClient;
 
     async void OnApplicationQuit() {
-        await StopClient();
+        await DisconnectFromServer();
     }
 
     protected async Task<bool> ConnectToServer(float Timeout = -1) {
@@ -53,7 +50,7 @@ public abstract class ClientBase : Shared
             return false;
         }
     }
-    protected async Task StopClient() {
+    protected async Task DisconnectFromServer() {
         // Send close message
         await SendToServer(MessageCodes.Close);
         // Stop the client
@@ -66,11 +63,12 @@ public abstract class ClientBase : Shared
         // Run custom function
         RunInMainThread(OnClientDisconnected);
     }
-    protected async Task<bool> SendToServer(string Message, float Timeout = -1) {
+    protected async Task<bool> SendToServer(string Message, bool NoDelay = false, float Timeout = -1) {
         if (TcpClient != null) {
             // Encrypt message
             string EncryptedMessage = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
             // Send bytes
+            TcpClient.TcpClient.NoDelay = NoDelay;
             await WaitForTask(TcpClient.NetworkStream.WriteAsync(CreatePacket(EncryptedMessage)).AsTask(), Timeout);
             return true;
         }
@@ -83,7 +81,7 @@ public abstract class ClientBase : Shared
         string Message = EncryptMessages ? Encryption.SimpleDecryptWithPassword(EncryptedMessage, EncryptionKey) : EncryptedMessage;
         // Check message
         if (Message == MessageCodes.Close || Message == MessageCodes.ServerFull) {
-            await StopClient();
+            await DisconnectFromServer();
             return;
         }
         else if (Message == MessageCodes.Welcome) {
