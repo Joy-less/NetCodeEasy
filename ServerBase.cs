@@ -57,6 +57,9 @@ public abstract class ServerBase : Shared
         // Await clients
         Task<TcpClient> TcpClientAwaiter = TcpServer.AcceptTcpClientAsync();
         bool Success = await WaitForTask(TcpClientAwaiter, Timeout);
+        // Accept more clients
+        _ = AcceptClients(Timeout);
+        // Check whether client obtained
         if (Success) {
             // Get the network client
             TcpClient Client = TcpClientAwaiter.Result;

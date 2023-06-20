@@ -30,7 +30,7 @@ public abstract class ClientBase : Shared
                 // Output
                 ClientLog($"Client started at {System.DateTime.Now.ToString("HH:mm:ss")}");
                 // Create the connection
-                TcpClient = new TcpConnection((IPEndPoint)Client.Client.LocalEndPoint, Client, Client.GetStream());
+                TcpClient = new TcpConnection((IPEndPoint)Client.Client.RemoteEndPoint, Client, Client.GetStream());
                 // Mark connection as pending
                 Connected = ConnectionStatus.ConnectionPending;
                 // Listen for packets from the server
