@@ -37,7 +37,7 @@ public class Shared : MonoBehaviour
     protected async Task RunInMainThread(System.Action Action) {
         PendingActionsForMainThread.Enqueue(Action);
         do {
-            await Task.Delay(15);
+            await Task.Delay(10);
         } while (PendingActionsForMainThread.Contains(Action));
     }
     protected virtual void Update() {
@@ -89,7 +89,7 @@ public class Shared : MonoBehaviour
         }
         return Bytes;
     }
-    protected async Task ListenForPackets(TcpConnection TcpConnection, System.Func<bool> CheckConnected, System.Action<TcpConnection, byte[]> OnReceived, System.Action<bool> OnRead) {
+    protected static async Task ListenForPackets(TcpConnection TcpConnection, System.Func<bool> CheckConnected, System.Action<TcpConnection, byte[]> OnReceived, System.Action<bool> OnRead) {
         // Initialise variables
         bool BuildingMessageLength = true;
         int MessageLength = 0;
