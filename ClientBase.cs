@@ -63,7 +63,7 @@ public abstract class ClientBase : Shared
         // Run custom function
         _ = RunInMainThread(OnClientDisconnected);
     }
-    protected async Task<bool> SendToServer(string Message, bool NoDelay = false, float Timeout = -1) {
+    protected async Task<bool> SendToServer(string Message, bool NoDelay = true, float Timeout = -1) {
         if (Connected == ConnectionStatus.Connected) {
             // Encrypt message
             Message = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;

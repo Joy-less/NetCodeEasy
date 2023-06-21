@@ -111,7 +111,7 @@ public abstract class ServerBase : Shared
         // Run custom function
         _ = RunInMainThread(() => OnClientDisconnected(TcpConnection));
     }
-    protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message, bool NoDelay = false, float Timeout = -1) {
+    protected async Task<bool> SendToClient(TcpConnection TcpConnection, string Message, bool NoDelay = true, float Timeout = -1) {
         if (TcpConnections.Contains(TcpConnection) || BlockedTcpConnections.Contains(TcpConnection)) {
             // Encrypt message
             Message = EncryptMessages ? Encryption.SimpleEncryptWithPassword(Message, EncryptionKey) : Message;
@@ -122,7 +122,7 @@ public abstract class ServerBase : Shared
         }
         return false;
     }
-    protected async Task SendToAllClients(string Message, bool NoDelay = false, float Timeout = -1) {
+    protected async Task SendToAllClients(string Message, bool NoDelay = true, float Timeout = -1) {
         HashSet<Task> Tasks = new();
         foreach (TcpConnection TcpConnection in TcpConnections) {
             Tasks.Add(SendToClient(TcpConnection, Message, NoDelay, Timeout));

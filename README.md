@@ -16,7 +16,7 @@ ServerIpAddress should be set to the public (or private for LAN) IP address of t
 
 You can connect using `StartServer()` and `ConnectToServer()`.
 
-After connecting, you can send a message using `SendToServer()` and `SendToClient()` or `SendToAllClients()`. If the NoDelay parameter is set to false, it will wait up to 200ms before sending the data to increase efficiency.
+After connecting, you can send a message using `SendToServer()` and `SendToClient()` or `SendToAllClients()`. If the NoDelay parameter is set to false, it will wait up to 200ms before sending the data to increase efficiency when sending large amounts of small data.
 
 You can get a list of connected clients using `GetClients()`.
 
