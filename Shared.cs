@@ -93,50 +93,50 @@ public class Shared : MonoBehaviour
         return Bytes;
     }
     protected static async Task ListenForPackets(TcpConnection TcpConnection, System.Func<bool> CheckConnected, System.Action<TcpConnection, byte[]> OnReceived, System.Action<bool> OnRead) {
-        // Initialise variables
-        bool BuildingMessageLength = true;
-        int MessageLength = 0;
-        List<byte> CurrentBytes = new();
-        byte[] Buffer = new byte[BufferSize];
-        // Read messages while connected
-        while (CheckConnected()) {
-            // Read all the available data
-            bool ReceivedData = false;
-            while (TcpConnection.NetworkStream.DataAvailable) {
-                ReceivedData = true;
-                // Add the data to CurrentBytes
-                int BytesRead = await TcpConnection.NetworkStream.ReadAsync(Buffer, 0, Buffer.Length);
-                CurrentBytes.AddRange(Buffer.ToList().GetRange(0, BytesRead));
-            }
-            // Get the message length
-            if (BuildingMessageLength == true) {
-                for (int i = 0; i < CurrentBytes.Count; i++) {
-                    // Check end of message length byte
-                    if (CurrentBytes[i] == 10) {
-                        // Remove & record length data from CurrentBytes
-                        MessageLength = int.Parse(string.Join("", CurrentBytes.GetRange(0, i)));
-                        BuildingMessageLength = false;
-                        CurrentBytes.RemoveRange(0, i + 1);
+        try {
+            // Initialise variables
+            List<byte> CurrentBytes = new();
+            byte[] Buffer = new byte[BufferSize];
+            // Read messages while connected
+            while (CheckConnected()) {
+                // Read all the available data
+                bool ReceivedData = false;
+                while (TcpConnection.NetworkStream.DataAvailable) {
+                    ReceivedData = true;
+                    // Add the data to CurrentBytes
+                    int BytesRead = await TcpConnection.NetworkStream.ReadAsync(Buffer, 0, Buffer.Length);
+                    CurrentBytes.AddRange(Buffer.ToList().GetRange(0, BytesRead));
+                }
+                // Check for a complete message in the data
+                if (CurrentBytes.Count > 0) {
+                    for (int i = 0; i < CurrentBytes.Count; i++) {
+                        // Check end of message length byte
+                        if (CurrentBytes[i] == 10) {
+                            // Get the message length
+                            int MessageLength = int.Parse(string.Join("", CurrentBytes.GetRange(0, i)));
+                            // Check if the message is complete
+                            if (CurrentBytes.Count - (i + 1) >= MessageLength) {
+                                // Take the message
+                                byte[] Message = CurrentBytes.GetRange(i + 1, MessageLength).ToArray();
+                                CurrentBytes.RemoveRange(0, (i + 1) + MessageLength);
+                                // Handle the message
+                                OnReceived(TcpConnection, Message);
+                            }
+                            // Break (the end message length byte has been reached)
+                            break;
+                        }
                     }
                 }
+                // Run if data was received this pass
+                if (OnRead != null) OnRead(ReceivedData);
+                // Wait until the next read
+                await Task.Delay(SecondsToMilliseconds(1 / ReadFrequency));
             }
-            // Get the message contents
-            if (BuildingMessageLength == false) {
-                // Check if full message has been received
-                if (CurrentBytes.Count >= MessageLength) {
-                    // Get the message from CurrentBytes
-                    byte[] Message = CurrentBytes.GetRange(0, MessageLength).ToArray();
-                    CurrentBytes.RemoveRange(0, MessageLength);
-                    MessageLength = 0;
-                    BuildingMessageLength = true;
-                    // Handle the message
-                    OnReceived(TcpConnection, Message);
-                }
-            }
-            // Run if data was received this pass
-            if (OnRead != null) OnRead(ReceivedData);
-            // Wait until the next read
-            await Task.Delay(SecondsToMilliseconds(1 / ReadFrequency));
+        }
+        catch (System.ObjectDisposedException) {
+        }
+        catch (System.Exception Ex) {
+            Debug.LogException(Ex);
         }
     }
 }
