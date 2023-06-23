@@ -24,6 +24,7 @@ public abstract class ClientBase : Shared
         try {
             // Start client
             Client = new TcpClient(AddressFamily.InterNetworkV6);
+            Client.Client.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
             // Connect to the server
             bool Success = await WaitForTask(Client.ConnectAsync(ServerIpAddress, ServerPort), Timeout);
             if (Success) {

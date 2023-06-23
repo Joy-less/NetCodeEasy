@@ -20,7 +20,7 @@ public abstract class ServerBase : Shared
         try {
             // Start TCP server
             TcpServer = new TcpListener(IPAddress.IPv6Any, ServerPort);
-            // TcpServer.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, 1);
+            TcpServer.Server.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
             TcpServer.Start();
             // Accept clients
             _ = Task.Run(() => AcceptClients());
