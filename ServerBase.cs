@@ -19,8 +19,8 @@ public abstract class ServerBase : Shared
     protected async Task StartServer() {
         try {
             // Start TCP server
-            TcpServer = new TcpListener(IPAddress.Any, ServerPort);
-            TcpServer.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, 1);
+            TcpServer = new TcpListener(IPAddress.IPv6Any, ServerPort);
+            // TcpServer.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, 1);
             TcpServer.Start();
             // Accept clients
             _ = Task.Run(() => AcceptClients());

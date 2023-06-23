@@ -8,7 +8,7 @@ using System.Linq;
 public class Shared : MonoBehaviour
 {
     protected static bool OutputDebugInfo = false; // Whether to output debug info
-    protected static string ServerIpAddress = "127.0.0.1"; // The IP address of the server
+    protected static string ServerIpAddress = "::1"; // The IP address of the server (IPv4 loopback is 127.0.0.1, IPv6 loopback is ::1)
     protected static int ServerPort = 7123; // An arbitrary number between 1024-65535 (see https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers)
     protected static int MaxClientCount = 2; // Maximum number of clients that can be connected to the server at any one time
     protected static float ReadFrequency = 30f; // How many times per second the client and server should read the network stream for new messages
@@ -104,20 +104,21 @@ public class Shared : MonoBehaviour
             // Read messages while connected
             while (CheckConnected()) {
                 // Read all the available data
-                bool ReceivedData = false;
+                bool DidReceiveData = false;
                 while (TcpConnection.NetworkStream.DataAvailable) {
-                    ReceivedData = true;
+                    DidReceiveData = true;
                     // Add the data to CurrentBytes
                     int BytesRead = await TcpConnection.NetworkStream.ReadAsync(Buffer, 0, Buffer.Length);
                     CurrentBytes.AddRange(Buffer.ToList().GetRange(0, BytesRead));
                 }
                 // Check for a complete message in the data
-                if (CurrentBytes.Count > 0) {
+                while (CurrentBytes.Count > 0) {
+                    bool GotCompletedMessage = false;
                     for (int i = 0; i < CurrentBytes.Count; i++) {
                         // Check end of message length byte
                         if (CurrentBytes[i] == 10) {
                             // Get the message length
-                            int MessageLength = int.Parse(string.Join("", CurrentBytes.GetRange(0, i)));
+                            int MessageLength = int.Parse(string.Concat(CurrentBytes.GetRange(0, i)));
                             // Check if the message is complete
                             if (CurrentBytes.Count - (i + 1) >= MessageLength) {
                                 // Take the message
@@ -125,14 +126,17 @@ public class Shared : MonoBehaviour
                                 CurrentBytes.RemoveRange(0, (i + 1) + MessageLength);
                                 // Handle the message
                                 OnReceived(TcpConnection, Message);
+                                // Mark got completed message as true
+                                GotCompletedMessage = true;
                             }
                             // Break (the end message length byte has been reached)
                             break;
                         }
                     }
+                    if (GotCompletedMessage == false) break;
                 }
-                // Run if data was received this pass
-                if (OnRead != null) OnRead(ReceivedData);
+                // Run OnRead if not null and data was received this pass
+                OnRead?.Invoke(DidReceiveData);
                 // Wait until the next read
                 await Task.Delay(SecondsToMilliseconds(1 / ReadFrequency));
             }

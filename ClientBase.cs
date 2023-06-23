@@ -23,7 +23,7 @@ public abstract class ClientBase : Shared
         TcpClient Client = null;
         try {
             // Start client
-            Client = new TcpClient();
+            Client = new TcpClient(AddressFamily.InterNetworkV6);
             // Connect to the server
             bool Success = await WaitForTask(Client.ConnectAsync(ServerIpAddress, ServerPort), Timeout);
             if (Success) {
