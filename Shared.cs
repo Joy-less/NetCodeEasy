@@ -88,7 +88,8 @@ public class Shared : MonoBehaviour
             string ByteCount = Bytes.Length.ToString();
             string ByteCountDigits = "";
             foreach (char ByteCountDigit in ByteCount) {
-                if (byte.TryParse(ByteCountDigits + ByteCountDigit, out byte Result) && Result != EndOfMessageByte) {
+                if (byte.TryParse(ByteCountDigits + ByteCountDigit, out byte Result) && Result != 255
+                    && Result.ToString().Length == ByteCountDigits.Length + 1) { // Ensure no zeros have been omitted
                 }
                 else {
                     MessageLengthBytes.Add(byte.Parse(ByteCountDigits));
