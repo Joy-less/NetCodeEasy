@@ -7,16 +7,18 @@ using System.Linq;
 
 public class Shared : MonoBehaviour
 {
-    protected static bool OutputDebugInfo = false; // Whether to output debug info
     protected static string ServerIpAddress = "::1"; // The IP address of the server (IPv4 loopback is 127.0.0.1, IPv6 loopback is ::1)
     protected static int ServerPort = 7123; // An arbitrary number between 1024-65535 (see https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers)
-    protected static int MaxClientCount = 2; // Maximum number of clients that can be connected to the server at any one time
+    protected static int MaxClientCount = 2; // Maximum number of clients that can be connected to the server at once
+    
     protected static float ReadFrequency = 30f; // How many times per second the client and server should read the network stream for new messages
     protected static float ClientTimeoutDuration = 8f; // How long before the server disconnects a client due to silence
-    protected static bool EncryptMessages = false; // Whether to encrypt and decrypt sent messages (slows down connections)
-    protected static string EncryptionKey = "KeyGoesHere"; // An application-level key used to encrypt messages
+    protected static bool OutputDebugInfo = false; // Whether to output info for debugging
 
-    protected readonly static System.Text.Encoding MessageEncoding = System.Text.Encoding.UTF8; // The text encoding of the sent messages
+    protected static bool EncryptMessages = false; // Whether to encrypt and decrypt messages (slows down connections)
+    protected static string EncryptionKey = "KeyGoesHere"; // The key used if encryption is enabled
+
+    protected readonly static System.Text.Encoding MessageEncoding = System.Text.Encoding.UTF8; // The text encoding of the messages
     protected static class MessageCodes { // Don't send these
         public const string Close = "CLOSE";
         public const string ServerFull = "SERVER_FULL";
@@ -88,7 +90,7 @@ public class Shared : MonoBehaviour
             string ByteCount = Bytes.Length.ToString();
             string ByteCountDigits = "";
             foreach (char ByteCountDigit in ByteCount) {
-                if (byte.TryParse(ByteCountDigits + ByteCountDigit, out byte Result) && Result != 255
+                if (byte.TryParse(ByteCountDigits + ByteCountDigit, out byte Result) && Result != EndOfMessageByte
                     && Result.ToString().Length == ByteCountDigits.Length + 1) { // Ensure no zeros have been omitted
                 }
                 else {
