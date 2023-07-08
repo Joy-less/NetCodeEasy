@@ -79,7 +79,7 @@ public class Shared : MonoBehaviour
     protected static double GetUnixTimeStamp() {
         return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000d;
     }
-    private const byte EndOfMessageByte = 255;
+    private const byte EndOfLengthByte = 255;
     protected static byte[] CreatePacket(string Message) {
         // Get message as bytes
         byte[] Bytes = MessageEncoding.GetBytes(Message);
@@ -90,7 +90,7 @@ public class Shared : MonoBehaviour
             string ByteCount = Bytes.Length.ToString();
             string ByteCountDigits = "";
             foreach (char ByteCountDigit in ByteCount) {
-                if (byte.TryParse(ByteCountDigits + ByteCountDigit, out byte Result) && Result != EndOfMessageByte
+                if (byte.TryParse(ByteCountDigits + ByteCountDigit, out byte Result) && Result != EndOfLengthByte
                     && Result.ToString().Length == ByteCountDigits.Length + 1) { // Ensure no zeros have been omitted
                 }
                 else {
@@ -101,7 +101,7 @@ public class Shared : MonoBehaviour
             }
             if (ByteCountDigits.Length != 0) MessageLengthBytes.Add(byte.Parse(ByteCountDigits));
             // Add the end of message length byte
-            MessageLengthBytes.Add(EndOfMessageByte);
+            MessageLengthBytes.Add(EndOfLengthByte);
             // Build the packet
             MessageLengthBytes.AddRange(Bytes);
             Bytes = MessageLengthBytes.ToArray();
@@ -127,8 +127,8 @@ public class Shared : MonoBehaviour
                 while (CurrentBytes.Count > 0) {
                     bool GotCompletedMessage = false;
                     for (int i = 0; i < CurrentBytes.Count; i++) {
-                        // Check end of message length byte
-                        if (CurrentBytes[i] == EndOfMessageByte) {
+                        // Find end of message length byte
+                        if (CurrentBytes[i] == EndOfLengthByte) {
                             // Get the message length
                             int MessageLength = int.Parse(string.Concat(CurrentBytes.GetRange(0, i)));
                             // Check if the message is complete
